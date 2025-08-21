@@ -1,0 +1,10 @@
+# Global owner - requires review for any changes
+* @asaf-valiuse
+
+# Workflows require extra attention to prevent deployment conflicts
+/.github/workflows/ @asaf-valiuse
+
+# Critical deployment and security files
+/requirements.txt @asaf-valiuse
+/app/main.py @asaf-valiuse
+/app/services/ @asaf-valiuse

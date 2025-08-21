@@ -10,6 +10,11 @@ on:
       - main
   workflow_dispatch:
 
+# Prevent concurrent deployments to avoid 409 conflicts
+concurrency:
+  group: deployment-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -18,6 +23,18 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      
+      - name: 🛡️ Deployment Safety Check
+        run: |
+          python -c "
+          import yaml, os
+          workflows = [f for f in os.listdir('.github/workflows') if f.endswith('.yml')]
+          print(f'✅ Found {len(workflows)} workflow(s): {workflows}')
+          if len(workflows) > 1:
+            print('❌ WARNING: Multiple workflows detected!')
+            exit(1)
+          print('✅ Deployment safety check passed')
+          "
 
       - name: Set up Python version
         uses: actions/setup-python@v5
