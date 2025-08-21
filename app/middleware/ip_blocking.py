@@ -219,11 +219,12 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
             if datetime.fromisoformat(attempt) > minute_ago
         ])
         
-        # Auto-ban conditions for API keys (stricter than IP)
+        # Auto-ban conditions for API keys (only for auth failures, NOT for rate limiting)
+        # We should NOT auto-block API keys for too many requests - that's what rate limiting is for
         should_ban = (
-            recent_requests > self.max_requests_per_minute or
-            recent_failed_auth > 3 or  # Even stricter for API key auth failures
-            len(activity.get('failed_auth', [])) > 20  # Total failed attempts
+            # recent_requests > self.max_requests_per_minute or  # REMOVED: Don't block for rate limiting
+            recent_failed_auth > 3 or  # Keep: Block for auth failures
+            len(activity.get('failed_auth', [])) > 20  # Keep: Block for total failed attempts
         )
         
         if should_ban and api_key not in self.blocked_api_keys:
