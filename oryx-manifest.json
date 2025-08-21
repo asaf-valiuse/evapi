@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "build": {
+    "commands": [
+      "pip install -r requirements.txt"
+    ]
+  },
+  "run": {
+    "command": "bash startup.sh"
+  }
+}

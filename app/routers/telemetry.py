@@ -1,0 +1,56 @@
+# app/routers/run.py
+from fastapi import APIRouter, Depends, Query, Request, HTTPException
+from fastapi.responses import JSONResponse, StreamingResponse
+from typing import Dict, Any, Optional, List
+import csv, io
+
+from ..services.auth import resolve_client_from_key  # ?key=... -> client_id
+from ..services.query_service import run_saved_query
+from ..services.error_codes import CodedError
+
+router = APIRouter(tags=["queries"])
+
+@router.get("/run")
+async def run_saved(
+    request: Request,
+    q: str = Query(..., description="Query code (catalog key)"),
+    client_id: int = Depends(resolve_client_from_key),
+    format: str = Query("json", pattern="^(json|csv)$"),
+    demo: bool = Query(False, description="Return demo data instead of actual results")
+):
+    # Collect all query params (leave them raw; service will filter/validate)
+    incoming: Dict[str, Any] = dict(request.query_params)
+    # Remove non-data params
+    for drop in ("key", "q", "format", "demo"):
+        incoming.pop(drop, None)
+
+    # Server-provided values (you can add more later)
+    server_context = {
+        "client_id": client_id
+    }
+
+    try:
+        rows, fieldnames = run_saved_query(query_id=q,
+                                           incoming_params=incoming,
+                                           server_context=server_context,
+                                           demo_mode=demo)
+    except CodedError as e:
+        raise HTTPException(status_code=400, detail=e.to_dict())
+    except ValueError as e:
+        # Fallback for any remaining simple string errors
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if format == "json":
+        return JSONResponse(rows)
+
+    # CSV stream with dynamic columns
+    def iter_csv():
+        buf = io.StringIO()
+        fn = fieldnames or (rows[0].keys() if rows else [])
+        writer = csv.DictWriter(buf, fieldnames=fn, extrasaction="ignore")
+        writer.writeheader(); yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+        for r in rows:
+            writer.writerow(r); yield buf.getvalue(); buf.seek(0); buf.truncate(0)
+
+    return StreamingResponse(iter_csv(), media_type="text/csv",
+                             headers={"Content-Disposition": f'attachment; filename=\"{q}.csv\"'})
