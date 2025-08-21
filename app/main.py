@@ -2,7 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import telemetry
 
-app = FastAPI(title="Direct Link API", version="1.0.0")
+# Disable docs in production for security
+app = FastAPI(
+    title="Direct Link API", 
+    version="1.0.0",
+    docs_url=None,      # Disables /docs
+    redoc_url=None,     # Disables /redoc
+    openapi_url=None    # Disables /openapi.json
+)
 
 # ——— Global CORS ———
 app.add_middleware(
