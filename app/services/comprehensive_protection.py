@@ -70,8 +70,33 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
     api_key = validated_params["key"]
     
     try:
-        # This calls your existing auth service to get client_id from server
-        client_id = await resolve_client_from_key(request)
+        # Import here to avoid circular imports
+        from .db import get_engine
+        from .error_codes import ErrorCode, get_error_response
+        from sqlalchemy import text
+        import re
+        
+        # Basic validation for GUID format
+        guid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        if not re.match(guid_pattern, api_key):
+            error_response = get_error_response(ErrorCode.AUTH_INVALID_FORMAT)
+            raise HTTPException(status_code=400, detail=error_response)
+        
+        # Direct database lookup
+        engine = get_engine()
+        sql = text("""
+            SELECT prev_id as account_id
+            FROM enervibe.accounts
+            WHERE api_key = :k 
+        """)
+        with engine.begin() as conn:
+            row = conn.execute(sql, {"k": api_key}).first()
+
+        if not row:
+            error_response = get_error_response(ErrorCode.AUTH_ACCESS_DENIED)
+            raise HTTPException(status_code=401, detail=error_response)
+
+        client_id = int(row[0])  # prev_id is the client_id
         
         # Log successful authentication
         security_monitor.log_api_usage(
@@ -79,8 +104,7 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
             endpoint=request.url.path,
             ip=client_ip,
             response_code=200,  # Auth success
-            response_time=0,
-            extra_data={"step": "authentication_success", "client_id": client_id}
+            response_time=0
         )
         
     except HTTPException as auth_error:
@@ -199,13 +223,7 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
             endpoint=request.url.path,
             ip=client_ip,
             response_code=200,
-            response_time=response_time,
-            extra_data={
-                "step": "protection_success",
-                "client_id": client_id,
-                "tier": cached_config.access_tier,
-                "cache_age_minutes": (datetime.now() - cached_config.last_refreshed).total_seconds() / 60
-            }
+            response_time=response_time
         )
         
         return cached_config

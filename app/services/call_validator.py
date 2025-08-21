@@ -12,7 +12,7 @@ class CallStructureValidator:
     def __init__(self):
         # Required query parameters for valid API calls
         self.required_params = ["key", "q"]
-        self.optional_params = ["demo", "format", "limit", "order_by", "order_desc"]
+        self.optional_params = ["demo", "format", "limit", "order_by", "order_desc", "minutes"]
         
         # API key format validation (basic)
         self.api_key_pattern = re.compile(r'^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$')
@@ -74,11 +74,8 @@ class CallStructureValidator:
                 if order_desc_val not in ["true", "false"]:
                     validation_errors.append("Order_desc must be 'true' or 'false'")
             
-            # Check for unknown parameters
-            all_valid_params = set(self.required_params + self.optional_params)
-            unknown_params = set(params.keys()) - all_valid_params
-            if unknown_params:
-                validation_errors.append(f"Unknown parameters: {', '.join(unknown_params)}")
+            # Note: We allow any additional parameters as they may be dynamic query parameters
+            # The query service will validate them against the query parameter schema
             
             if validation_errors:
                 return False, "; ".join(validation_errors), {}

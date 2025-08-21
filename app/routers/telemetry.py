@@ -18,7 +18,8 @@ async def run_saved(
     q: str = Query(..., description="Query code (catalog key)"),
     cached_config = Depends(comprehensive_api_protection),  # Comprehensive API protection flow
     format: str = Query("json", pattern="^(json|csv)$"),
-    demo: bool = Query(False, description="Return demo data instead of actual results")
+    demo: bool = Query(False, description="Return demo data instead of actual results"),
+    minutes: int = Query(None, description="Custom time window in minutes for the query")
 ):
     import time
     start_time = time.time()
@@ -29,7 +30,7 @@ async def run_saved(
     
     # Collect all query params (leave them raw; service will filter/validate)
     incoming: Dict[str, Any] = dict(request.query_params)
-    # Remove non-data params
+    # Remove non-data params (keep minutes as it's a query parameter)
     for drop in ("key", "q", "format", "demo"):
         incoming.pop(drop, None)
 
@@ -51,14 +52,7 @@ async def run_saved(
             endpoint=f"/run?q={q}",
             ip=client_ip,
             response_code=200,
-            response_time=response_time,
-            extra_data={
-                "query_code": q,
-                "result_count": len(rows) if rows else 0,
-                "client_id": cached_config.client_id,
-                "access_tier": cached_config.access_tier,
-                "format": format
-            }
+            response_time=response_time
         )
         
     except CodedError as e:
