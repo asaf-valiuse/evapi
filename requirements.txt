@@ -4,3 +4,8 @@ SQLAlchemy==2.0.32
 pyodbc==5.2.0
 python-dotenv==1.0.1
 gunicorn==21.2.0
+
+# API Protection
+slowapi==0.1.9
+redis==5.0.1
+limits==3.6.0

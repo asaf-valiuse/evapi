@@ -1,7 +1,36 @@
-# FastAPI Direct-Link Service (SQL Server)
+# EnerVibe API
 
-This project exposes a **direct link** (URL) that returns account-specific data (JSON or CSV)
-from SQL Server. Authentication is done via an API key (either in a header or as a query token).
+A FastAPI-based REST API service for accessing vehicle telemetry and sensor data.
+
+## 🚀 Live API
+**Base URL:** `https://enervibe-api-gfb6hpa4fvftabdj.israelcentral-01.azurewebsites.net`
+
+## 📖 Documentation
+- **[Full API Documentation](API_DOCUMENTATION.md)** - Complete API reference
+- **[Quick Reference](QUICK_REFERENCE.md)** - Essential usage examples
+
+## 🔑 Features
+- **Authentication** - API key-based access control
+- **Multiple Formats** - JSON and CSV response formats
+- **Demo Mode** - Test with sample data
+- **Real-time Data** - Live vehicle telemetry access
+- **Error Handling** - Structured error codes and messages
+- **CORS Support** - Web browser compatibility
+
+## ⚡ Quick Test
+```bash
+# Health check
+curl "https://enervibe-api-gfb6hpa4fvftabdj.israelcentral-01.azurewebsites.net/healthz"
+
+# Get vehicle data
+curl "https://enervibe-api-gfb6hpa4fvftabdj.israelcentral-01.azurewebsites.net/run?key=YOUR_API_KEY&q=QUERY_ID"
+```
+
+## 🏗️ Architecture
+- **FastAPI** - Modern Python web framework
+- **Azure App Service** - Cloud hosting  
+- **SQL Server** - Database backend
+- **GitHub Actions** - CI/CD deployment
 
 ## Quick Start
 

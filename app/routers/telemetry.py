@@ -5,8 +5,10 @@ from typing import Dict, Any, Optional, List
 import csv, io
 
 from ..services.auth import resolve_client_from_key  # ?key=... -> client_id
+from ..services.comprehensive_protection import comprehensive_api_protection
 from ..services.query_service import run_saved_query
 from ..services.error_codes import CodedError
+from ..services.security_monitor import security_monitor
 
 router = APIRouter(tags=["queries"])
 
@@ -14,10 +16,17 @@ router = APIRouter(tags=["queries"])
 async def run_saved(
     request: Request,
     q: str = Query(..., description="Query code (catalog key)"),
-    client_id: int = Depends(resolve_client_from_key),
+    cached_config = Depends(comprehensive_api_protection),  # Comprehensive API protection flow
     format: str = Query("json", pattern="^(json|csv)$"),
     demo: bool = Query(False, description="Return demo data instead of actual results")
 ):
+    import time
+    start_time = time.time()
+    
+    # Get client IP for logging
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+    api_key = request.query_params.get("key", "")
+    
     # Collect all query params (leave them raw; service will filter/validate)
     incoming: Dict[str, Any] = dict(request.query_params)
     # Remove non-data params
@@ -26,7 +35,7 @@ async def run_saved(
 
     # Server-provided values (you can add more later)
     server_context = {
-        "client_id": client_id
+        "client_id": cached_config.client_id
     }
 
     try:
@@ -34,10 +43,45 @@ async def run_saved(
                                            incoming_params=incoming,
                                            server_context=server_context,
                                            demo_mode=demo)
+        
+        # Log successful API usage with database tier info
+        response_time = time.time() - start_time
+        security_monitor.log_api_usage(
+            api_key=cached_config.api_key,
+            endpoint=f"/run?q={q}",
+            ip=client_ip,
+            response_code=200,
+            response_time=response_time,
+            extra_data={
+                "query_code": q,
+                "result_count": len(rows) if rows else 0,
+                "client_id": cached_config.client_id,
+                "access_tier": cached_config.access_tier,
+                "format": format
+            }
+        )
+        
     except CodedError as e:
+        # Log the error for monitoring
+        response_time = time.time() - start_time
+        security_monitor.log_api_usage(
+            api_key=cached_config.api_key,
+            endpoint=f"/run?q={q}",
+            ip=client_ip,
+            response_code=400,
+            response_time=response_time
+        )
         raise HTTPException(status_code=400, detail=e.to_dict())
     except ValueError as e:
         # Fallback for any remaining simple string errors
+        response_time = time.time() - start_time
+        security_monitor.log_api_usage(
+            api_key=cached_config.api_key,
+            endpoint=f"/run?q={q}",
+            ip=client_ip,
+            response_code=400,
+            response_time=response_time
+        )
         raise HTTPException(status_code=400, detail=str(e))
 
     if format == "json":

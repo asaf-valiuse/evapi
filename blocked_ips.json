@@ -1,0 +1,10 @@
+{
+  "127.0.0.1": {
+    "total_requests": 50,
+    "first_seen": "2025-08-21T16:34:15.507997",
+    "last_request": "2025-08-21T16:34:28.744774",
+    "is_blocked": true,
+    "block_reason": "Brutal attack: 50 requests in 1 minute",
+    "block_timestamp": "2025-08-21T16:34:28.744774"
+  }
+}
