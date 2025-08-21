@@ -1,25 +1,33 @@
-# Azure App Service Deployment Guide
+# Azure App Service Deployment Guide (Linux)
 
 ## Prerequisites
 1. Azure subscription
-2. Azure App Service (Python 3.11)
+2. Azure App Service (Linux, Python 3.11)
 3. Azure SQL Database (or accessible SQL Server)
 
 ## Deployment Steps
 
-### 1. Create Azure App Service
+### 1. Create Azure App Service (Linux)
 ```bash
 # Using Azure CLI
 az webapp create \
   --resource-group your-resource-group \
   --plan your-app-service-plan \
   --name your-app-name \
-  --runtime "PYTHON|3.11"
+  --runtime "PYTHON|3.11" \
+  --os-type Linux
 ```
 
 ### 2. Configure App Settings in Azure Portal
 Go to Azure Portal > App Service > Configuration > Application settings:
 
+**Option A: Using Connection String (Recommended)**
+```
+api_db_conn=DRIVER={ODBC Driver 17 for SQL Server};SERVER=your-server.database.windows.net;DATABASE=your-database;UID=your-username;PWD=your-password
+SCM_DO_BUILD_DURING_DEPLOYMENT=true
+```
+
+**Option B: Using Individual Settings**
 ```
 AZURE_SQL_SERVER=your-server.database.windows.net
 AZURE_SQL_DATABASE=your-database-name
