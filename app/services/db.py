@@ -12,16 +12,26 @@ def get_engine() -> Engine:
     if _engine is not None:
         return _engine
 
-    # Check if running in Azure (environment variables take precedence)
+    # Check if running in Azure (connection string takes precedence)
+    azure_conn_string = os.getenv("api_db_conn")
+    if azure_conn_string:
+        # Azure uses direct connection string
+        connection_url = f"mssql+pyodbc:///?odbc_connect={urllib.parse.quote_plus(azure_conn_string)}"
+        _engine = create_engine(connection_url, echo=False, pool_pre_ping=True)
+        return _engine
+    
+    # Check for individual Azure environment variables (alternative method)
     azure_server = os.getenv("AZURE_SQL_SERVER")
     if azure_server:
-        # Azure SQL Database configuration
+        # Azure SQL Database configuration with individual variables
         host = azure_server
         port = int(os.getenv("AZURE_SQL_PORT", "1433"))
         db = os.getenv("AZURE_SQL_DATABASE")
         user = os.getenv("AZURE_SQL_USERNAME")
         pwd = os.getenv("AZURE_SQL_PASSWORD")
         driver = "ODBC Driver 17 for SQL Server"
+        encrypt = "yes"
+        tsc = "no"
     else:
         # Local configuration from db_config.json
         cfg_path = Path(__file__).resolve().parent.parent.parent / "db_config.json"
@@ -34,9 +44,8 @@ def get_engine() -> Engine:
         user = cfg.get("username")
         pwd = cfg.get("password")
         driver = cfg.get("driver", "ODBC Driver 17 for SQL Server")
-        
-    encrypt = "yes" if azure_server else cfg.get("encrypt", "yes") if not azure_server else "yes"
-    tsc = "no" if azure_server else cfg.get("trust_server_certificate", "no") if not azure_server else "no"
+        encrypt = cfg.get("encrypt", "yes")
+        tsc = cfg.get("trust_server_certificate", "no")
 
     # Build ODBC connection string
     odbc_str = (
