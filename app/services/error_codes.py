@@ -14,6 +14,7 @@ class ErrorCode(Enum):
     QUERY_PROCESSING_FAILED = 2004
     QUERY_INVALID_VALUE = 2005
     QUERY_VALUE_OUT_OF_BOUNDS = 2006
+    QUERY_NOT_AVAILABLE = 2007
     
     # Database Errors (3000-3999)
     DB_CONNECTION_FAILED = 3001
@@ -58,6 +59,7 @@ ERROR_MESSAGES = {
     ErrorCode.QUERY_PROCESSING_FAILED: "Unable to process request",
     ErrorCode.QUERY_INVALID_VALUE: "Invalid value provided",
     ErrorCode.QUERY_VALUE_OUT_OF_BOUNDS: "Value outside allowed range",
+    ErrorCode.QUERY_NOT_AVAILABLE: "Query is not available",
     
     ErrorCode.DB_CONNECTION_FAILED: "Service temporarily unavailable",
     ErrorCode.DB_SCHEMA_ERROR: "Service temporarily unavailable",

@@ -29,6 +29,21 @@ Thumbs.db
 
 # Logs
 *.log
+api_security.log
+
+# Local artifacts
+blocked_ips.json
+oryx-manifest.json
+startup.sh
+setup_protection.sh
+setup_protection.bat
+
+# Tests and scripts
+test_*.py
+*_test.py
+test_*.ps1
+test_rate_limiting.ps1
+valid_resp.json
 
 # Azure specific
 .azure/
