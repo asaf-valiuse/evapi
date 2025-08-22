@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import telemetry, debug
 # Removed old rate limiting middleware - now using database-driven system
@@ -47,15 +47,18 @@ app.include_router(telemetry.router)
 app.include_router(debug.router)
 
 # Serve API manual at /api_doc
-public_dir = Path(__file__).resolve().parent.parent / "public"
+public_dir = Path(__file__).resolve().parent / "public"
 if public_dir.exists():
-    # Mount so index.html and assets (css/js/img) are available under /api_doc/
-    app.mount("/api_doc/", StaticFiles(directory=str(public_dir), html=True), name="api_doc")
+    # Mount assets and directory browsing under /api_doc/*
+    app.mount("/api_doc", StaticFiles(directory=str(public_dir), html=True), name="api_doc")
 
-    # Ensure /api_doc (without trailing slash) redirects to the mounted directory to serve index.html
-    @app.get("/api_doc")
-    async def api_doc_redirect():
-        return RedirectResponse(url="/api_doc/")
+    # Ensure /api_doc (exact) serves the index.html
+    @app.get("/api_doc", include_in_schema=False)
+    async def api_doc_index():
+        index_path = public_dir / "index.html"
+        if index_path.exists():
+            return FileResponse(str(index_path), media_type="text/html")
+        raise HTTPException(status_code=404, detail="API manual not found")
 
 @app.get("/healthz")
 def healthz(request: Request):
