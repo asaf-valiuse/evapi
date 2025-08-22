@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Request, Depends, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import telemetry, debug
 # Removed old rate limiting middleware - now using database-driven system
@@ -7,6 +9,7 @@ from .middleware.ip_blocking import IPBlockingMiddleware
 from .services.auth import resolve_client_from_key
 from datetime import datetime
 import os
+from pathlib import Path
 
 # Disable docs in production for security
 app = FastAPI(
@@ -42,6 +45,17 @@ app.add_middleware(
 
 app.include_router(telemetry.router)
 app.include_router(debug.router)
+
+# Serve API manual at /api_doc
+public_dir = Path(__file__).resolve().parent.parent / "public"
+if public_dir.exists():
+    # Mount so index.html and assets (css/js/img) are available under /api_doc/
+    app.mount("/api_doc/", StaticFiles(directory=str(public_dir), html=True), name="api_doc")
+
+    # Ensure /api_doc (without trailing slash) redirects to the mounted directory to serve index.html
+    @app.get("/api_doc")
+    async def api_doc_redirect():
+        return RedirectResponse(url="/api_doc/")
 
 @app.get("/healthz")
 def healthz(request: Request):
