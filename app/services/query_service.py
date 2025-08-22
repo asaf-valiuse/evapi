@@ -94,8 +94,13 @@ def run_saved_query(
                 WHERE id = :query_id
             """), {"query_id": query_id}).mappings().first()
 
-            if not qrow or not qrow["is_active"]:
+            print(f"DEBUG: Query lookup for {query_id}, qrow result: {qrow}")
+            if not qrow:
+                print(f"DEBUG: Query not found, raising QUERY_NOT_FOUND")
                 raise_coded_error(ErrorCode.QUERY_NOT_FOUND)
+            elif not qrow["is_active"]:
+                print(f"DEBUG: Query not active, raising QUERY_NOT_AVAILABLE")
+                raise_coded_error(ErrorCode.QUERY_NOT_AVAILABLE)
 
             params_meta = conn.execute(text("""
                 SELECT param_name, sql_type, is_required, default_value, min_value, max_value, allowed_values, source
@@ -108,13 +113,26 @@ def run_saved_query(
             for param in params_meta:
                 print(f"  - {param['param_name']}: source={param['source']}, required={param['is_required']} (type: {type(param['is_required'])}), default={param['default_value']}")
     
+    except CodedError:
+        # Propagate known coded errors (e.g., QUERY_NOT_FOUND, QUERY_NOT_AVAILABLE)
+        # so the API layer can return the correct error response.
+        raise
     except Exception as e:
         error_msg = str(e).lower()
+        print(f"DEBUG: Database exception: {e}")  # Debug logging
+        
+        # Check for schema/table issues
         if "invalid object name" in error_msg or "object not found" in error_msg:
             raise_coded_error(ErrorCode.DB_SCHEMA_ERROR)
-        elif "unknown or inactive query id" in error_msg:
+        # Check for query not found cases
+        elif "unknown or inactive query id" in error_msg or "no such query" in error_msg:
             raise_coded_error(ErrorCode.QUERY_NOT_FOUND)
+        # Check for connection issues
+        elif "connection" in error_msg or "timeout" in error_msg or "network" in error_msg:
+            raise_coded_error(ErrorCode.QUERY_SERVICE_UNAVAILABLE)
+        # If we can't categorize it, assume it's a service issue but log it
         else:
+            print(f"WARNING: Uncategorized database error: {e}")
             raise_coded_error(ErrorCode.QUERY_SERVICE_UNAVAILABLE)
 
     allow = {r["param_name"]: dict(r) for r in params_meta}

@@ -7,7 +7,7 @@ import csv, io
 from ..services.auth import resolve_client_from_key  # ?key=... -> client_id
 from ..services.comprehensive_protection import comprehensive_api_protection
 from ..services.query_service import run_saved_query
-from ..services.error_codes import CodedError
+from ..services.error_codes import CodedError, ErrorCode
 from ..services.security_monitor import security_monitor
 
 router = APIRouter(tags=["queries"])
@@ -56,16 +56,17 @@ async def run_saved(
         )
         
     except CodedError as e:
-        # Log the error for monitoring
+        # Log the error for monitoring with appropriate status code
         response_time = time.time() - start_time
+        status = 404 if getattr(e, "error_code", None) == ErrorCode.QUERY_NOT_FOUND else 400
         security_monitor.log_api_usage(
             api_key=cached_config.api_key,
             endpoint=f"/run?q={q}",
             ip=client_ip,
-            response_code=400,
+            response_code=status,
             response_time=response_time
         )
-        raise HTTPException(status_code=400, detail=e.to_dict())
+        raise HTTPException(status_code=status, detail=e.to_dict())
     except ValueError as e:
         # Fallback for any remaining simple string errors
         response_time = time.time() - start_time
