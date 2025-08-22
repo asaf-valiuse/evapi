@@ -45,19 +45,26 @@ app.add_middleware(
 
 app.include_router(telemetry.router)
 
-# Serve API manual at /api_doc
-public_dir = Path(__file__).resolve().parent / "public"
-if public_dir.exists():
-    # Mount assets and directory browsing under /api_doc/*
-    app.mount("/api_doc", StaticFiles(directory=str(public_dir), html=True), name="api_doc")
+# Serve API manual at /api_doc (with error handling for production)
+try:
+    public_dir = Path(__file__).resolve().parent / "public"
+    if public_dir.exists() and (public_dir / "index.html").exists():
+        # Mount assets and directory browsing under /api_doc/*
+        app.mount("/api_doc", StaticFiles(directory=str(public_dir), html=True), name="api_doc")
 
-    # Ensure /api_doc (exact) serves the index.html
-    @app.get("/api_doc", include_in_schema=False)
-    async def api_doc_index():
-        index_path = public_dir / "index.html"
-        if index_path.exists():
+        # Ensure /api_doc (exact) serves the index.html
+        @app.get("/api_doc", include_in_schema=False)
+        async def api_doc_index():
+            index_path = public_dir / "index.html"
             return FileResponse(str(index_path), media_type="text/html")
-        raise HTTPException(status_code=404, detail="API manual not found")
+    else:
+        # Fallback if public directory doesn't exist
+        @app.get("/api_doc", include_in_schema=False)
+        async def api_doc_fallback():
+            raise HTTPException(status_code=404, detail="API documentation not available")
+except Exception as e:
+    # Don't let static file mounting break the entire app
+    pass
 
 @app.get("/healthz")
 def healthz(request: Request):
