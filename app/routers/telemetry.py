@@ -1,10 +1,9 @@
-# app/routers/run.py
+# app/routers/telemetry.py
 from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Dict, Any, Optional, List
 import csv, io
 
-from ..services.auth import resolve_client_from_key_or_header  # Updated to support both header and query param
 from ..services.comprehensive_protection import comprehensive_api_protection
 from ..services.query_service import run_saved_query
 from ..services.error_codes import CodedError, ErrorCode
@@ -26,12 +25,21 @@ async def run_saved(
     
     # Get client IP for logging
     client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
-    api_key = request.query_params.get("key", "")
+    
+    # API key is now extracted from headers via comprehensive protection
+    # Get the first 8 characters for logging (it's already been validated)
+    authorization = request.headers.get("authorization", "")
+    api_key_for_logging = ""
+    if authorization:
+        if authorization.startswith('Bearer '):
+            api_key_for_logging = authorization[7:15] + "..."  # First 8 chars + "..."
+        else:
+            api_key_for_logging = authorization[:8] + "..."
     
     # Collect all query params (leave them raw; service will filter/validate)
     incoming: Dict[str, Any] = dict(request.query_params)
     # Remove non-data params (keep minutes as it's a query parameter)
-    for drop in ("key", "q", "format", "demo"):
+    for drop in ("q", "format", "demo"):
         incoming.pop(drop, None)
 
     # Server-provided values (you can add more later)

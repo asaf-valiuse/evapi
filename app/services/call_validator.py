@@ -10,9 +10,9 @@ class CallStructureValidator:
     """Validates API call structure"""
     
     def __init__(self):
-        # Required query parameters for valid API calls (key is now optional - can be in header)
+        # Required query parameters for valid API calls
         self.required_params = ["q"]
-        self.optional_params = ["demo", "format", "limit", "order_by", "order_desc", "minutes", "key"]  # key is now optional
+        self.optional_params = ["demo", "format", "limit", "order_by", "order_desc", "minutes"]
         
         # API key format validation (basic)
         self.api_key_pattern = re.compile(r'^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$')
@@ -29,22 +29,19 @@ class CallStructureValidator:
             # Extract query parameters
             params = dict(request.query_params)
             
-            # Extract API key from Authorization header or query parameter
+            # Extract API key from Authorization header only
             api_key = None
             authorization = request.headers.get("authorization")
             
             if authorization:
-                # Extract from header (preferred method)
+                # Extract from header (required method)
                 if authorization.startswith('Bearer '):
                     api_key = authorization[7:]  # Remove 'Bearer ' prefix
                 else:
                     api_key = authorization
-            elif "key" in params:
-                # Fallback to query parameter (deprecated but supported for compatibility)
-                api_key = params["key"]
             
             if not api_key:
-                return False, "API key required in Authorization header or 'key' query parameter", {}
+                return False, "API key required in Authorization header", {}
             
             # Validate API key format (GUID) or JWT token
             if api_key.startswith('eyJ'):

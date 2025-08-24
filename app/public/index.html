@@ -10,7 +10,24 @@
       --bg: #f9fafb;
       --panel: #ffffff;
       --ink: #111827;
-      --muted: #6b7280;
+      --mu      <section id="tools" class="card half">
+        <h2>Using in Tools</h2>
+        <h3>Excel / Google Sheets</h3>
+        <p><strong>With Header Authentication:</strong></p>
+        <ol>
+          <li>Use Power Query or Google Sheets' IMPORTDATA with custom headers</li>
+          <li>Set Authorization header: <code class="kbd">Bearer YOUR_API_KEY</code></li>
+          <li>URL format: <code class="kbd">https://ev-api.valiuse.com/run?q=QUERY_ID&format=csv</code></li>
+        </ol>
+        <p><strong>Legacy (URL parameter):</strong></p>
+        <ol>
+          <li>Open Excel or Google Sheets.</li>
+          <li>Use "Get Data from Web" / "Import".</li>
+          <li>Paste your API URL with <code class="kbd">?key=API_KEY&amp;format=csv</code>.</li>
+        </ol>
+        <h3>Web Browser</h3>
+        <p>For header-based auth, use browser developer tools or API testing tools like Postman. For legacy URL parameter method, paste the URL into the address bar.</p>
+      </section>0;
       --line: #e5e7eb;
       --line-strong: #d1d5db;
       --code-bg: #f3f4f6;
@@ -101,6 +118,7 @@
       <nav class="toc">
         <a href="#getting-started">Getting Started</a>
         <a href="#api-url">API URL</a>
+        <a href="#authentication">Authentication</a>
         <a href="#basic-usage">Basic Usage</a>
         <a href="#available-data">Available Data</a>
         <a href="#samples">Samples & Fields</a>
@@ -122,6 +140,7 @@
         <li><strong>Query ID</strong> — the predefined query you intend to run.</li>
         <li><strong>Network access</strong> — outbound HTTPS to the API.</li>
       </ul>
+      <p class="notice"><strong>Security Note:</strong> The API now supports secure header-based authentication to prevent API keys from appearing in server logs. While legacy URL parameter authentication is still supported for backward compatibility, header-based authentication is strongly recommended for all new integrations.</p>
     </section>
 
     <div class="grid">
@@ -130,15 +149,42 @@
         <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>https://ev-api.valiuse.com</pre>
       </section>
 
-      <section id="basic-usage" class="card half">
+      <section id="authentication" class="card half">
+        <h2>Authentication</h2>
+        <h3>🔐 Header-Based (Recommended)</h3>
+        <p>Include your API key in the <code class="kbd">Authorization</code> header:</p>
+        <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>Authorization: Bearer YOUR_API_KEY</pre>
+        <h3>📄 Query Parameter (Legacy)</h3>
+        <p>Include in URL (not recommended for production):</p>
+        <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>?key=YOUR_API_KEY</pre>
+      </section>
+    </div>
+
+    <div class="grid">
+      <section id="basic-usage" class="card">
         <h2>Basic Usage</h2>
+        
         <h3>Health Check</h3>
         <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>https://ev-api.valiuse.com/healthz</pre>
         <p>Expected: <code class="kbd">{&quot;ok&quot;: true}</code></p>
-        <h3>Run a Query</h3>
+        
+        <h3>Run a Query - Header Authentication (Recommended)</h3>
+        <p><strong>Using curl:</strong></p>
+        <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://ev-api.valiuse.com/run?q=YOUR_QUERY_ID"</pre>
+        
+        <p><strong>Using browser with headers (JavaScript):</strong></p>
+        <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>fetch('https://ev-api.valiuse.com/run?q=YOUR_QUERY_ID', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+})</pre>
+        
+        <h3>Run a Query - URL Parameter (Legacy)</h3>
         <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>https://ev-api.valiuse.com/run?key=YOUR_API_KEY&amp;q=YOUR_QUERY_ID</pre>
+        <p class="muted">⚠️ Not recommended: API keys may appear in server access logs</p>
+        
         <p class="muted">Replace <code class="kbd">YOUR_API_KEY</code> and <code class="kbd">YOUR_QUERY_ID</code> with real values.</p>
-      </section>
     </div>
 
     <section id="available-data" class="card">
@@ -318,13 +364,35 @@
 
     <section id="examples" class="card">
       <h2>Examples</h2>
-      <h3>Vehicles Weight (last 30 minutes)</h3>
+      
+      <h3>Vehicles Weight (last 30 minutes) - Header Auth</h3>
+      <p><strong>Using curl:</strong></p>
+      <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://ev-api.valiuse.com/run?q=5EF690DC-092B-4176-A7B4-16408FAF0B9E&amp;minutes=30"</pre>
+      
+      <p><strong>Using browser JavaScript:</strong></p>
+      <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>fetch('https://ev-api.valiuse.com/run?q=5EF690DC-092B-4176-A7B4-16408FAF0B9E&minutes=30', {
+  headers: { 'Authorization': 'Bearer YOUR_API_KEY' }
+}).then(r => r.json()).then(console.log)</pre>
+
+      <h3>Wheels Telemetry (15 minutes) as CSV - Header Auth</h3>
+      <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://ev-api.valiuse.com/run?q=8394F36D-2C9C-4871-AB8A-5489175E32E4&amp;format=csv"</pre>
+
+      <h3>Alerts (last 24 hours; include resolved) - Header Auth</h3>
+      <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>curl -H "Authorization: Bearer YOUR_API_KEY" \
+     "https://ev-api.valiuse.com/run?q=47CE71C4-7406-4207-A0E9-ACBA0382CC18&amp;hours=24&amp;include_closed=1"</pre>
+
+      <h3>Legacy URL Parameter Examples (Not Recommended)</h3>
+      <p class="muted">⚠️ These examples use URL parameters which may expose API keys in logs:</p>
+      
+      <p><strong>Vehicles Weight:</strong></p>
       <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>https://ev-api.valiuse.com/run?key=YOUR_API_KEY&amp;q=5EF690DC-092B-4176-A7B4-16408FAF0B9E&amp;minutes=30</pre>
 
-      <h3>Wheels Telemetry (15 minutes) as CSV</h3>
+      <p><strong>Wheels Telemetry as CSV:</strong></p>
       <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>https://ev-api.valiuse.com/run?key=YOUR_API_KEY&amp;q=8394F36D-2C9C-4871-AB8A-5489175E32E4&amp;format=csv</pre>
 
-      <h3>Alerts (last 24 hours; include resolved)</h3>
+      <p><strong>Alerts:</strong></p>
       <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>https://ev-api.valiuse.com/run?key=YOUR_API_KEY&amp;q=47CE71C4-7406-4207-A0E9-ACBA0382CC18&amp;hours=24&amp;include_closed=1</pre>
     </section>
 
