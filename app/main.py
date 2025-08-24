@@ -6,7 +6,6 @@ from .routers import telemetry, auth
 # Removed old rate limiting middleware - now using database-driven system
 from .middleware.request_protection import RequestProtectionMiddleware
 from .middleware.ip_blocking import IPBlockingMiddleware
-from .services.auth import resolve_client_from_key
 from datetime import datetime
 import os
 from pathlib import Path

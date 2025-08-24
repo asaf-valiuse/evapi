@@ -11,7 +11,6 @@ from typing import Optional
 import time
 from .ip_brutal_tracker import ip_brutal_tracker
 from .call_validator import call_validator
-from .auth import resolve_client_from_key
 from .rate_limit_cache import rate_limit_cache, CachedRateLimit
 from .security_monitor import security_monitor
 from datetime import datetime, timedelta

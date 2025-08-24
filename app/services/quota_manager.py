@@ -120,22 +120,31 @@ quota_manager = APIKeyQuotaManager()
 
 async def resolve_client_with_quota_check(request: Request) -> int:
     """Enhanced auth that includes quota checking"""
-    from ..services.auth import resolve_client_from_key
+    from ..services.auth import resolve_client_from_header
     from ..services.security_monitor import security_monitor
+    from fastapi import Header
+    from typing import Optional
     
-    # Get API key from query params
-    api_key = request.query_params.get("key")
-    if not api_key:
-        raise HTTPException(status_code=401, detail="API key required")
+    # Get API key from Authorization header
+    authorization = request.headers.get("Authorization")
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header required")
     
     # Validate API key and get client_id
     try:
-        client_id = await resolve_client_from_key(request)
+        client_id = await resolve_client_from_header(authorization)
+        
+        # Extract the actual API key for quota tracking
+        if authorization.startswith("Bearer "):
+            api_key = authorization[7:]  # Remove "Bearer " prefix
+        else:
+            api_key = authorization
+            
     except Exception as e:
         # Track failed authentication by API key
         client_ip = request.headers.get("x-forwarded-for", 
                                       request.client.host if request.client else "unknown")
-        security_monitor.log_authentication_failure(client_ip, api_key)
+        security_monitor.log_authentication_failure(client_ip, authorization[:16] + "..." if authorization else "None")
         
         # Also track in IP blocking middleware for API key abuse
         from ..middleware.ip_blocking import IPBlockingMiddleware
