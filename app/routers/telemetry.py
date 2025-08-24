@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Dict, Any, Optional, List
 import csv, io
 
-from ..services.auth import resolve_client_from_key  # ?key=... -> client_id
+from ..services.auth import resolve_client_from_key_or_header  # Updated to support both header and query param
 from ..services.comprehensive_protection import comprehensive_api_protection
 from ..services.query_service import run_saved_query
 from ..services.error_codes import CodedError, ErrorCode

@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, Depends, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import telemetry
+from .routers import telemetry, auth
 # Removed old rate limiting middleware - now using database-driven system
 from .middleware.request_protection import RequestProtectionMiddleware
 from .middleware.ip_blocking import IPBlockingMiddleware
@@ -44,6 +44,7 @@ app.add_middleware(
 )
 
 app.include_router(telemetry.router)
+app.include_router(auth.router)
 
 # Serve API manual at /api_doc (with error handling for production)
 try:

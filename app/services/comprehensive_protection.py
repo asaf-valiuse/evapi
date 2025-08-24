@@ -67,40 +67,70 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
         raise HTTPException(status_code=400, detail=f"Invalid call structure: {structure_error}")
     
     # Step 3: Authenticate and get client_id (only after structure is valid)
-    api_key = validated_params["key"]
+    api_key_or_token = validated_params["key"]
     
     try:
-        # Import here to avoid circular imports
-        from .db import get_engine
-        from .error_codes import ErrorCode, get_error_response
-        from sqlalchemy import text
-        import re
-        
-        # Basic validation for GUID format
-        guid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
-        if not re.match(guid_pattern, api_key):
-            error_response = get_error_response(ErrorCode.AUTH_INVALID_FORMAT)
-            raise HTTPException(status_code=400, detail=error_response)
-        
-        # Direct database lookup
-        engine = get_engine()
-        sql = text("""
-            SELECT prev_id as account_id
-            FROM enervibe.accounts
-            WHERE api_key = :k 
-        """)
-        with engine.begin() as conn:
-            row = conn.execute(sql, {"k": api_key}).first()
+        # Check if it's a JWT token (starts with 'eyJ')
+        if api_key_or_token.startswith('eyJ'):
+            # JWT token authentication
+            from .token_service import token_service
+            payload = token_service.verify_token(api_key_or_token)
+            client_id = payload.get("client_id")
+            
+            # For rate limiting, we need the original API key
+            # Let's get it from the database using the client_id
+            from .db import get_engine
+            from sqlalchemy import text
+            engine = get_engine()
+            sql = text("""
+                SELECT api_key
+                FROM enervibe.accounts
+                WHERE prev_id = :client_id 
+            """)
+            with engine.begin() as conn:
+                row = conn.execute(sql, {"client_id": client_id}).first()
+            
+            if not row:
+                from .error_codes import ErrorCode, get_error_response
+                error_response = get_error_response(ErrorCode.AUTH_ACCESS_DENIED)
+                raise HTTPException(status_code=401, detail=error_response)
+                
+            api_key = row[0]  # Use the original API key for rate limiting
+        else:
+            # API key authentication
+            api_key = api_key_or_token
+            
+            # Import here to avoid circular imports
+            from .db import get_engine
+            from .error_codes import ErrorCode, get_error_response
+            from sqlalchemy import text
+            import re
+            
+            # Basic validation for GUID format
+            guid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+            if not re.match(guid_pattern, api_key):
+                error_response = get_error_response(ErrorCode.AUTH_INVALID_FORMAT)
+                raise HTTPException(status_code=400, detail=error_response)
+            
+            # Direct database lookup
+            engine = get_engine()
+            sql = text("""
+                SELECT prev_id as account_id
+                FROM enervibe.accounts
+                WHERE api_key = :k 
+            """)
+            with engine.begin() as conn:
+                row = conn.execute(sql, {"k": api_key}).first()
 
-        if not row:
-            error_response = get_error_response(ErrorCode.AUTH_ACCESS_DENIED)
-            raise HTTPException(status_code=401, detail=error_response)
+            if not row:
+                error_response = get_error_response(ErrorCode.AUTH_ACCESS_DENIED)
+                raise HTTPException(status_code=401, detail=error_response)
 
-        client_id = int(row[0])  # prev_id is the client_id
+            client_id = int(row[0])  # prev_id is the client_id
         
         # Log successful authentication
         security_monitor.log_api_usage(
-            api_key=api_key,
+            api_key=api_key[:8] + "..." if len(api_key) > 8 else api_key,
             endpoint=request.url.path,
             ip=client_ip,
             response_code=200,  # Auth success
@@ -113,7 +143,7 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
             "AUTH_FAILED",
             client_ip,
             {
-                "api_key": api_key[:8] + "...",
+                "api_key": api_key_or_token[:8] + "..." if len(api_key_or_token) > 8 else api_key_or_token,
                 "endpoint": request.url.path,
                 "auth_error": str(auth_error.detail)
             }
@@ -124,7 +154,7 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
             "AUTH_ERROR",
             client_ip,
             {
-                "api_key": api_key[:8] + "...",
+                "api_key": api_key_or_token[:8] + "..." if len(api_key_or_token) > 8 else api_key_or_token,
                 "endpoint": request.url.path,
                 "error": str(e)
             }
@@ -132,6 +162,7 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
         raise HTTPException(status_code=500, detail="Authentication service error")
     
     # Step 4: Check cached rate limits (only after successful auth)
+    # Now we always use the api_key for rate limiting, whether it came from direct API key or JWT token
     try:
         # 4a) Check if key exists in cache
         cached_config = await rate_limit_cache.get_rate_limit_config(api_key)
@@ -141,7 +172,7 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
             security_monitor.log_suspicious_activity(
                 "RATE_LIMIT_CONFIG_NOT_FOUND",
                 client_ip,
-                {"api_key": api_key[:8] + "...", "client_id": client_id}
+                {"api_key": api_key[:8] + "..." if len(api_key) > 8 else api_key, "client_id": client_id}
             )
             raise HTTPException(status_code=500, detail="Rate limit configuration not found")
         
@@ -151,7 +182,7 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
                 "CLIENT_ID_MISMATCH", 
                 client_ip,
                 {
-                    "api_key": api_key[:8] + "...",
+                    "api_key": api_key[:8] + "..." if len(api_key) > 8 else api_key,
                     "auth_client_id": client_id,
                     "cached_client_id": cached_config.client_id
                 }

@@ -10,9 +10,9 @@ class CallStructureValidator:
     """Validates API call structure"""
     
     def __init__(self):
-        # Required query parameters for valid API calls
-        self.required_params = ["key", "q"]
-        self.optional_params = ["demo", "format", "limit", "order_by", "order_desc", "minutes"]
+        # Required query parameters for valid API calls (key is now optional - can be in header)
+        self.required_params = ["q"]
+        self.optional_params = ["demo", "format", "limit", "order_by", "order_desc", "minutes", "key"]  # key is now optional
         
         # API key format validation (basic)
         self.api_key_pattern = re.compile(r'^[A-F0-9]{8}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{4}-[A-F0-9]{12}$')
@@ -29,15 +29,40 @@ class CallStructureValidator:
             # Extract query parameters
             params = dict(request.query_params)
             
+            # Extract API key from Authorization header or query parameter
+            api_key = None
+            authorization = request.headers.get("authorization")
+            
+            if authorization:
+                # Extract from header (preferred method)
+                if authorization.startswith('Bearer '):
+                    api_key = authorization[7:]  # Remove 'Bearer ' prefix
+                else:
+                    api_key = authorization
+            elif "key" in params:
+                # Fallback to query parameter (deprecated but supported for compatibility)
+                api_key = params["key"]
+            
+            if not api_key:
+                return False, "API key required in Authorization header or 'key' query parameter", {}
+            
+            # Validate API key format (GUID) or JWT token
+            if api_key.startswith('eyJ'):
+                # JWT token - basic validation (starts with 'eyJ')
+                if len(api_key) < 50:  # JWT tokens are much longer
+                    return False, "Invalid JWT token format", {}
+            else:
+                # API key - validate GUID format
+                if not self._is_valid_api_key(api_key):
+                    return False, "Invalid API key format", {}
+            
+            # Add API key to params for downstream processing
+            params["key"] = api_key
+            
             # Check required parameters exist
             for required_param in self.required_params:
                 if required_param not in params:
                     return False, f"Missing required parameter: {required_param}", {}
-            
-            # Validate API key format
-            api_key = params.get("key", "")
-            if not self._is_valid_api_key(api_key):
-                return False, "Invalid API key format", {}
             
             # Validate query code format
             query_code = params.get("q", "")
