@@ -151,12 +151,9 @@
 
       <section id="authentication" class="card half">
         <h2>Authentication</h2>
-        <h3>🔐 Header-Based (Recommended)</h3>
+        <h3>🔐 Header (Required)</h3>
         <p>Include your API key in the <code class="kbd">Authorization</code> header:</p>
         <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>Authorization: Bearer YOUR_API_KEY</pre>
-        <h3>📄 Query Parameter (Legacy)</h3>
-        <p>Include in URL (not recommended for production):</p>
-        <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>?key=YOUR_API_KEY</pre>
       </section>
     </div>
 
@@ -168,7 +165,7 @@
         <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>https://ev-api.valiuse.com/healthz</pre>
         <p>Expected: <code class="kbd">{&quot;ok&quot;: true}</code></p>
         
-        <h3>Run a Query - Header Authentication (Recommended)</h3>
+        <h3>Run a Query</h3>
         <p><strong>Using curl:</strong></p>
         <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>curl -H "Authorization: Bearer YOUR_API_KEY" \
      "https://ev-api.valiuse.com/run?q=YOUR_QUERY_ID"</pre>
@@ -178,13 +175,7 @@
   headers: {
     'Authorization': 'Bearer YOUR_API_KEY'
   }
-})</pre>
-        
-        <h3>Run a Query - URL Parameter (Legacy)</h3>
-        <pre data-copy="true"><button class="copy-btn" aria-label="Copy">Copy</button>https://ev-api.valiuse.com/run?key=YOUR_API_KEY&amp;q=YOUR_QUERY_ID</pre>
-        <p class="muted">⚠️ Not recommended: API keys may appear in server access logs</p>
-        
-        <p class="muted">Replace <code class="kbd">YOUR_API_KEY</code> and <code class="kbd">YOUR_QUERY_ID</code> with real values.</p>
+})</pre><p class="muted">Replace <code class="kbd">YOUR_API_KEY</code> and <code class="kbd">YOUR_QUERY_ID</code> with real values.</p>
     </div>
 
     <section id="available-data" class="card">
