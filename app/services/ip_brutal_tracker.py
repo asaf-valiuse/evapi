@@ -55,18 +55,30 @@ class IPBrutalAttackTracker:
         try:
             if os.path.exists(self.blocked_ips_file):
                 with open(self.blocked_ips_file, 'r') as f:
-                    blocked_data = json.load(f)
-                    for ip, data in blocked_data.items():
-                        self._ip_tracking[ip] = IPTrackingInfo(
-                            ip_address=ip,
-                            requests_in_minute=[],
-                            total_requests=data.get('total_requests', 0),
-                            first_seen=datetime.fromisoformat(data.get('first_seen', datetime.now().isoformat())),
-                            last_request=datetime.fromisoformat(data.get('last_request', datetime.now().isoformat())),
-                            is_blocked=data.get('is_blocked', False),
-                            block_reason=data.get('block_reason', ''),
-                            block_timestamp=datetime.fromisoformat(data['block_timestamp']) if data.get('block_timestamp') else None
-                        )
+                    file_data = json.load(f)
+                    
+                    # Handle both old format (direct IP mapping) and new format (with 'ips' array)
+                    if isinstance(file_data, dict):
+                        if 'ips' in file_data:
+                            # New format: {"ips": [], "api_keys": [], "ranges": [], "updated": "..."}
+                            # For now, we'll just initialize with empty tracking since this is a different format
+                            # The brutal tracker will rebuild its data as requests come in
+                            pass
+                        else:
+                            # Old format: direct IP to data mapping
+                            blocked_data = file_data
+                            for ip, data in blocked_data.items():
+                                if isinstance(data, dict):  # Ensure data is a dict
+                                    self._ip_tracking[ip] = IPTrackingInfo(
+                                        ip_address=ip,
+                                        requests_in_minute=[],
+                                        total_requests=data.get('total_requests', 0),
+                                        first_seen=datetime.fromisoformat(data.get('first_seen', datetime.now().isoformat())),
+                                        last_request=datetime.fromisoformat(data.get('last_request', datetime.now().isoformat())),
+                                        is_blocked=data.get('is_blocked', False),
+                                        block_reason=data.get('block_reason', ''),
+                                        block_timestamp=datetime.fromisoformat(data['block_timestamp']) if data.get('block_timestamp') else None
+                                    )
         except Exception as e:
             print(f"Warning: Could not load blocked IPs: {e}")
     

@@ -6,6 +6,7 @@ from .routers import telemetry, auth
 # Removed old rate limiting middleware - now using database-driven system
 from .middleware.request_protection import RequestProtectionMiddleware
 from .middleware.ip_blocking import IPBlockingMiddleware
+from .middleware.security_logging_middleware import SecurityLoggingMiddleware
 from datetime import datetime
 import os
 from pathlib import Path
@@ -21,10 +22,13 @@ app = FastAPI(
 
 # ——— Security Middleware (order matters!) ———
 
-# 1. IP and API Key blocking (first line of defense)
+# 1. Security logging middleware (outermost - logs everything)
+app.add_middleware(SecurityLoggingMiddleware)
+
+# 2. IP and API Key blocking (first line of defense)
 app.add_middleware(IPBlockingMiddleware)
 
-# 2. Request protection (size, timeout, concurrent requests)
+# 3. Request protection (size, timeout, concurrent requests)
 app.add_middleware(
     RequestProtectionMiddleware,
     max_request_size=1024 * 1024,  # 1MB max request size
@@ -32,7 +36,7 @@ app.add_middleware(
     max_concurrent_requests=100    # Max 100 concurrent requests
 )
 
-# 3. CORS (be more restrictive in production)
+# 4. CORS (be more restrictive in production)
 allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,

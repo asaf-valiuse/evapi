@@ -15,6 +15,20 @@ from .rate_limit_cache import rate_limit_cache, CachedRateLimit
 from .security_monitor import security_monitor
 from datetime import datetime, timedelta
 
+# Helper function to add security events for background logging
+def add_security_event_to_request(request: Request, event_type: str, **kwargs):
+    """Add a security event to be logged in background after response"""
+    try:
+        from ..middleware.security_logging_middleware import add_security_event
+        add_security_event(request, event_type, **kwargs)
+    except ImportError:
+        # Fallback to immediate file logging if middleware not available
+        security_monitor.log_suspicious_activity(
+            event_type, 
+            request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown"),
+            kwargs
+        )
+
 # In-memory usage tracking for rate limiting windows
 # Format: {api_key: {minute: [], hour: [], day: []}}
 usage_windows = {}
@@ -39,11 +53,24 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
     
     if is_ip_blocked:
         blocked_reason = ip_brutal_tracker.is_ip_blocked(client_ip)[1]
+        
+        # Immediate file logging
         security_monitor.log_suspicious_activity(
             "IP_BLOCKED_BRUTAL_ATTACK",
             client_ip,
             {"reason": blocked_reason, "endpoint": request.url.path}
         )
+        
+        # Schedule background database logging
+        add_security_event_to_request(
+            request,
+            "IP_BLOCKED_BRUTAL_ATTACK",
+            event_description=f"IP blocked due to brutal attack: {blocked_reason}",
+            response_code=429,
+            severity="HIGH",
+            event_data={"reason": blocked_reason, "endpoint": request.url.path}
+        )
+        
         raise HTTPException(
             status_code=429, 
             detail=f"IP blocked due to brutal attack: {blocked_reason}"
@@ -54,6 +81,8 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
     
     if not is_valid_structure:
         # Wrong call structure - this counts toward IP brutal attack measure
+        
+        # Immediate file logging
         security_monitor.log_suspicious_activity(
             "INVALID_CALL_STRUCTURE",
             client_ip,
@@ -63,6 +92,21 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
                 "query_params": dict(request.query_params)
             }
         )
+        
+        # Schedule background database logging
+        add_security_event_to_request(
+            request,
+            "INVALID_CALL_STRUCTURE",
+            event_description=f"Invalid call structure: {structure_error}",
+            response_code=400,
+            severity="MEDIUM",
+            event_data={
+                "error": structure_error,
+                "endpoint": request.url.path,
+                "query_params": dict(request.query_params)
+            }
+        )
+        
         raise HTTPException(status_code=400, detail=f"Invalid call structure: {structure_error}")
     
     # Step 3: Authenticate and get client_id (only after structure is valid)
@@ -230,6 +274,22 @@ async def comprehensive_api_protection(request: Request) -> CachedRateLimit:
                     "client_id": client_id,
                     "tier": cached_config.access_tier,
                     "limit_reason": rate_limit_reason
+                }
+            )
+            
+            # Schedule background database logging for rate limit violation
+            add_security_event_to_request(
+                request,
+                "RATE_LIMIT_EXCEEDED",
+                api_key=api_key,
+                client_id=client_id,
+                event_description=f"Rate limit exceeded: {rate_limit_reason}",
+                response_code=429,
+                severity="MEDIUM",
+                event_data={
+                    "tier": cached_config.access_tier,
+                    "limit_reason": rate_limit_reason,
+                    "limits": cached_config.get_rate_limits()
                 }
             )
             

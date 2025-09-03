@@ -1,5 +1,5 @@
 # app/routers/telemetry.py
-from fastapi import APIRouter, Depends, Query, Request, HTTPException
+from fastapi import APIRouter, Depends, Query, Request, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse, StreamingResponse
 from typing import Dict, Any, Optional, List
 import csv, io
@@ -8,11 +8,13 @@ from ..services.comprehensive_protection import comprehensive_api_protection
 from ..services.query_service import run_saved_query
 from ..services.error_codes import CodedError, ErrorCode
 from ..services.security_monitor import security_monitor
+from ..services.background_logger import log_api_request_background
 
 router = APIRouter(tags=["queries"])
 
 @router.get("/run")
 async def run_saved(
+    background_tasks: BackgroundTasks,
     request: Request,
     q: str = Query(..., description="Query code (catalog key)"),
     cached_config = Depends(comprehensive_api_protection),  # Comprehensive API protection flow
@@ -53,8 +55,10 @@ async def run_saved(
                                            server_context=server_context,
                                            demo_mode=demo)
         
-        # Log successful API usage with database tier info
+        # Calculate response time for logging
         response_time = time.time() - start_time
+        
+        # Log successful API usage with file logging (immediate)
         security_monitor.log_api_usage(
             api_key=cached_config.api_key,
             endpoint=f"/run?q={q}",
@@ -63,10 +67,25 @@ async def run_saved(
             response_time=response_time
         )
         
+        # Schedule database logging as background task (after response)
+        background_tasks.add_task(
+            log_api_request_background,
+            api_key=cached_config.api_key,
+            client_id=cached_config.client_id,
+            endpoint=f"/run?q={q}",
+            client_ip=client_ip,
+            response_code=200,
+            response_time=response_time,
+            query_params={"q": q, "format": format, "demo": demo, "minutes": minutes, **incoming},
+            user_agent=request.headers.get("user-agent")
+        )
+        
     except CodedError as e:
         # Log the error for monitoring with appropriate status code
         response_time = time.time() - start_time
         status = 404 if getattr(e, "error_code", None) == ErrorCode.QUERY_NOT_FOUND else 400
+        
+        # Immediate file logging
         security_monitor.log_api_usage(
             api_key=cached_config.api_key,
             endpoint=f"/run?q={q}",
@@ -74,10 +93,27 @@ async def run_saved(
             response_code=status,
             response_time=response_time
         )
+        
+        # Schedule database logging as background task
+        background_tasks.add_task(
+            log_api_request_background,
+            api_key=cached_config.api_key,
+            client_id=cached_config.client_id,
+            endpoint=f"/run?q={q}",
+            client_ip=client_ip,
+            response_code=status,
+            response_time=response_time,
+            query_params={"q": q, "format": format, "demo": demo, "minutes": minutes, **incoming},
+            user_agent=request.headers.get("user-agent"),
+            error_details=str(e.to_dict())
+        )
+        
         raise HTTPException(status_code=status, detail=e.to_dict())
     except ValueError as e:
         # Fallback for any remaining simple string errors
         response_time = time.time() - start_time
+        
+        # Immediate file logging
         security_monitor.log_api_usage(
             api_key=cached_config.api_key,
             endpoint=f"/run?q={q}",
@@ -85,6 +121,21 @@ async def run_saved(
             response_code=400,
             response_time=response_time
         )
+        
+        # Schedule database logging as background task
+        background_tasks.add_task(
+            log_api_request_background,
+            api_key=cached_config.api_key,
+            client_id=cached_config.client_id,
+            endpoint=f"/run?q={q}",
+            client_ip=client_ip,
+            response_code=400,
+            response_time=response_time,
+            query_params={"q": q, "format": format, "demo": demo, "minutes": minutes, **incoming},
+            user_agent=request.headers.get("user-agent"),
+            error_details=str(e)
+        )
+        
         raise HTTPException(status_code=400, detail=str(e))
 
     if format == "json":
