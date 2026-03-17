@@ -1,8 +1,118 @@
 # app/services/query_service.py
 from typing import Dict, Any, List, Tuple
+from datetime import datetime, timezone, timedelta
+import json
+import random
 from sqlalchemy import text
 from .db import get_engine
 from .error_codes import ErrorCode, CodedError, raise_coded_error
+
+WHEEL_TELEMETRY_QUERY_ID = "8394F36D-2C9C-4871-AB8A-5489175E32E4"
+VEHICLE_WEIGHT_DEMO_QUERY_ID = "5EF680DC-082B-4176-A7B4-16408FAF0B9E"
+
+
+def _randomize_metric(base_value: Any, minimum: float, maximum: float, max_delta: float, digits: int = 0) -> Any:
+    """Return a realistic randomized metric while staying in a safe range."""
+    try:
+        numeric_base = float(base_value)
+    except (TypeError, ValueError):
+        numeric_base = (minimum + maximum) / 2
+
+    randomized = numeric_base + random.uniform(-max_delta, max_delta)
+    randomized = max(minimum, min(maximum, randomized))
+    if digits <= 0:
+        return int(round(randomized))
+    return round(randomized, digits)
+
+
+def _build_dynamic_demo_rows(query_id: str, example_json: str | None) -> Tuple[List[dict], List[str]] | None:
+    """Build per-call demo data when a query needs dynamic sample values."""
+    if not example_json:
+        return None
+
+    try:
+        demo_data = json.loads(example_json)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+    if isinstance(demo_data, dict):
+        demo_rows = [demo_data]
+    elif isinstance(demo_data, list):
+        demo_rows = demo_data
+    else:
+        return None
+
+    normalized_query_id = query_id.upper()
+
+    if normalized_query_id == VEHICLE_WEIGHT_DEMO_QUERY_ID:
+        timestamp_now = datetime.now(timezone.utc).replace(microsecond=0)
+        randomized_rows: List[dict] = []
+
+        for index, row in enumerate(demo_rows):
+            if not isinstance(row, dict):
+                continue
+
+            randomized_row = dict(row)
+            sample_timestamp = timestamp_now - timedelta(seconds=index * 5)
+
+            if "message_timestamp" in randomized_row:
+                randomized_row["message_timestamp"] = sample_timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            if "total_weight" in randomized_row:
+                base_weight = randomized_row["total_weight"]
+                if not isinstance(base_weight, (int, float)) or float(base_weight) <= 0:
+                    base_weight = 32000
+                randomized_row["total_weight"] = _randomize_metric(
+                    base_weight,
+                    minimum=18000.0,
+                    maximum=44000.0,
+                    max_delta=2200.0
+                )
+
+            randomized_rows.append(randomized_row)
+
+        return randomized_rows, list(randomized_rows[0].keys()) if randomized_rows else []
+
+    if normalized_query_id != WHEEL_TELEMETRY_QUERY_ID:
+        return demo_rows, list(demo_rows[0].keys()) if demo_rows else []
+
+    timestamp_now = datetime.now(timezone.utc).replace(microsecond=0)
+    randomized_rows: List[dict] = []
+
+    for index, row in enumerate(demo_rows):
+        if not isinstance(row, dict):
+            continue
+
+        randomized_row = dict(row)
+        sample_timestamp = timestamp_now - timedelta(seconds=index * 3)
+
+        # Keep the SQL template structure intact and only adjust the live telemetry fields.
+        if "message_timestamp" in randomized_row:
+            randomized_row["message_timestamp"] = sample_timestamp.isoformat()
+        if "pressure" in randomized_row:
+            randomized_row["pressure"] = _randomize_metric(
+                randomized_row["pressure"],
+                minimum=95.0,
+                maximum=125.0,
+                max_delta=3.0
+            )
+        if "temp" in randomized_row:
+            randomized_row["temp"] = _randomize_metric(
+                randomized_row["temp"],
+                minimum=35.0,
+                maximum=85.0,
+                max_delta=2.5
+            )
+        if "load" in randomized_row:
+            randomized_row["load"] = _randomize_metric(
+                randomized_row["load"],
+                minimum=800.0,
+                maximum=4500.0,
+                max_delta=180.0
+            )
+
+        randomized_rows.append(randomized_row)
+
+    return randomized_rows, list(randomized_rows[0].keys()) if randomized_rows else []
 
 def _cast_value(raw: Any, sql_type: str) -> Any:
     """
@@ -205,6 +315,16 @@ def run_saved_query(
     print(f"DEBUG: Final bound parameters: {bound}")
     print(f"DEBUG: SQL query: {qrow['sql_text']}")
 
+    if demo_mode:
+        print("DEBUG: Demo mode enabled - building demo payload")
+        dynamic_demo = _build_dynamic_demo_rows(query_id, qrow.get("example_json"))
+        if dynamic_demo is not None:
+            demo_rows, field_order = dynamic_demo
+            print(f"DEBUG: Returning demo payload with {len(demo_rows)} records")
+            return demo_rows, field_order
+        print("DEBUG: No valid example_json found for demo payload")
+        raise_coded_error(ErrorCode.QUERY_PROCESSING_FAILED)
+
     # 3) Execute safely with bound params
     with eng.begin() as conn:
         try:
@@ -229,28 +349,4 @@ def run_saved_query(
         # field order for CSV (optional)
         field_order = list(result_rows[0].keys()) if result_rows else []
 
-    # If demo mode is enabled, return example_json from query metadata
-    if demo_mode:
-        print(f"DEBUG: Demo mode enabled - returning example_json from query metadata")
-        
-        # Get example_json from query metadata if available
-        example_json = qrow.get('example_json')
-        if example_json:
-            try:
-                # Parse the example JSON string into actual data
-                import json
-                demo_data = json.loads(example_json)
-                # Ensure it's a list for consistency
-                if isinstance(demo_data, dict):
-                    demo_data = [demo_data]
-                field_order = list(demo_data[0].keys()) if demo_data else []
-                print(f"DEBUG: Successfully parsed example_json with {len(demo_data)} records")
-                return demo_data, field_order
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"DEBUG: Could not parse example_json: {e}")
-                raise_coded_error(ErrorCode.QUERY_PROCESSING_FAILED)
-        else:
-            print(f"DEBUG: No example_json found in query metadata")
-            raise_coded_error(ErrorCode.QUERY_PROCESSING_FAILED)
-    
     return result_rows, field_order
