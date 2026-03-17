@@ -10,6 +10,42 @@ from .error_codes import ErrorCode, CodedError, raise_coded_error
 WHEEL_TELEMETRY_QUERY_ID = "8394F36D-2C9C-4871-AB8A-5489175E32E4"
 VEHICLE_WEIGHT_DEMO_QUERY_ID = "5EF680DC-082B-4176-A7B4-16408FAF0B9E"
 
+FALLBACK_DEMO_ROWS = {
+    WHEEL_TELEMETRY_QUERY_ID: [
+        {
+            "vehicle_number": "89373702",
+            "wheel_position": "11",
+            "device_id": "47634A4E",
+            "message_timestamp": "2026-01-01T00:00:00",
+            "pressure": 111,
+            "temp": 60,
+            "load": 1713,
+        }
+    ],
+    VEHICLE_WEIGHT_DEMO_QUERY_ID: [
+        {
+            "vehicle_number": "Demo-001",
+            "message_timestamp": "2026-01-01 00:00:00",
+            "total_weight": 0,
+        },
+        {
+            "vehicle_number": "Demo-002",
+            "message_timestamp": "2026-01-01 00:00:00",
+            "total_weight": 0,
+        },
+        {
+            "vehicle_number": "Demo-003",
+            "message_timestamp": "2026-01-01 00:00:00",
+            "total_weight": 0,
+        },
+        {
+            "vehicle_number": "Demo-004",
+            "message_timestamp": "2026-01-01 00:00:00",
+            "total_weight": 0,
+        },
+    ],
+}
+
 
 def _randomize_metric(base_value: Any, minimum: float, maximum: float, max_delta: float, digits: int = 0) -> Any:
     """Return a realistic randomized metric while staying in a safe range."""
@@ -27,22 +63,25 @@ def _randomize_metric(base_value: Any, minimum: float, maximum: float, max_delta
 
 def _build_dynamic_demo_rows(query_id: str, example_json: str | None) -> Tuple[List[dict], List[str]] | None:
     """Build per-call demo data when a query needs dynamic sample values."""
-    if not example_json:
-        return None
-
-    try:
-        demo_data = json.loads(example_json)
-    except (json.JSONDecodeError, TypeError):
-        return None
-
-    if isinstance(demo_data, dict):
-        demo_rows = [demo_data]
-    elif isinstance(demo_data, list):
-        demo_rows = demo_data
-    else:
-        return None
-
     normalized_query_id = query_id.upper()
+
+    if not example_json:
+        demo_rows = [dict(row) for row in FALLBACK_DEMO_ROWS.get(normalized_query_id, [])]
+    else:
+        try:
+            demo_data = json.loads(example_json)
+        except (json.JSONDecodeError, TypeError):
+            demo_rows = [dict(row) for row in FALLBACK_DEMO_ROWS.get(normalized_query_id, [])]
+        else:
+            if isinstance(demo_data, dict):
+                demo_rows = [demo_data]
+            elif isinstance(demo_data, list):
+                demo_rows = demo_data
+            else:
+                demo_rows = [dict(row) for row in FALLBACK_DEMO_ROWS.get(normalized_query_id, [])]
+
+    if not demo_rows:
+        return None
 
     if normalized_query_id == VEHICLE_WEIGHT_DEMO_QUERY_ID:
         timestamp_now = datetime.now(timezone.utc).replace(microsecond=0)
